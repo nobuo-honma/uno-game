@@ -1,19 +1,19 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    // 静的エクスポートを有効にする（GitHub Pagesに必須）
+    // 1. 静的出力
     output: 'export',
 
-    // 画像の最適化を無効化（静的サイトではサーバーサイドの画像処理ができないため）
+    // 2. 画像の最適化無効化
     images: {
         unoptimized: true,
     },
 
-    // 重要：リポジトリ名をパスに含める
-    // URLが https://nobuo-honma.github.io/uno-game/ になる場合は '/uno-game'
+    // 3. リポジトリ名を設定（前後にスラッシュを付ける）
     basePath: '/uno-game',
 
-    // 資産（JS/CSS）の読み込みパスを合わせる
-    assetPrefix: '/uno-game',
+    // 4. assetPrefix は basePath と同じにするが、末尾にスラッシュが必要な場合がある
+    // ※実は、最近のNext.jsなら assetPrefix 自体を消しても basePath だけで動くことが多いです
+    assetPrefix: '/uno-game/',
 };
 
 export default nextConfig;
