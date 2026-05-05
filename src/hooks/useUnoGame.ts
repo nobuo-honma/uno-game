@@ -27,7 +27,7 @@ export const useUnoGame = () => {
 
     const playCards = (playerIdx: number, cards: Card[]) => {
         if (!gameState || gameState.turn !== playerIdx) return;
-        
+
         const first = cards[0];
         if (!first) return;
 
@@ -43,7 +43,7 @@ export const useUnoGame = () => {
     const executeMove = (playerIdx: number, cards: Card[], selectedColor: Color | null) => {
         setGameState((prev: GameState | null) => {
             if (!prev) return prev;
-            
+
             const newPlayers = [...prev.players];
             const currentHand = newPlayers[playerIdx];
             if (!currentHand) return prev;
