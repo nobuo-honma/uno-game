@@ -1,112 +1,110 @@
-import { useState, useCallback } from 'react';
-import type { Card, Color, GameState } from '../types/uno';
-import { createDeck, shuffle } from '../lib/uno-utils';
+"use client";
+import { useState, useCallback, useEffect } from 'react';
+import type { Card, GameState, Color } from '../types/uno';
+import { createDeck, shuffle, canPlayCards } from '../lib/uno-utils';
+import { selectAiCards } from '../lib/ai-logic';
 
 export const useUnoGame = () => {
     const [gameState, setGameState] = useState<GameState | null>(null);
     const [isSelectingColor, setIsSelectingColor] = useState(false);
     const [pendingCards, setPendingCards] = useState<Card[]>([]);
 
-    const initGame = useCallback(() => {
-        const deck = shuffle(createDeck());
-        const hands = [deck.splice(0, 7), deck.splice(0, 7)];
-        const firstCard = deck.pop();
-        if (!firstCard) return;
-
+    // ゲーム初期化（プレイヤー数を引数に取る）
+    const initGame = useCallback((count: number = 4) => {
+        const newDeck = shuffle(createDeck());
+        const players: Card[][] = [];
+        for (let i = 0; i < count; i++) {
+            players.push(newDeck.splice(0, 7));
+        }
+        const firstDiscard = newDeck.pop()!;
         setGameState({
-            deck,
-            discardPile: [firstCard],
-            players: hands,
-            turn: 0,
-            direction: 1,
-            gameEnd: false,
-            winner: null,
-            activeColor: null,
+            deck: newDeck, discardPile: [firstDiscard], players,
+            turn: 0, direction: 1, gameEnd: false, winner: null, activeColor: null,
+            playerCount: count
         });
     }, []);
 
-    const playCards = (playerIdx: number, cards: Card[]) => {
-        if (!gameState || gameState.turn !== playerIdx) return;
-
-        const first = cards[0];
-        if (!first) return;
-
-        if (first.color === 'wild' || first.value === 'wild' || first.value === 'wild4') {
-            setPendingCards(cards);
-            setIsSelectingColor(true);
-            return;
-        }
-
-        executeMove(playerIdx, cards, null);
-    };
-
-    const executeMove = (playerIdx: number, cards: Card[], selectedColor: Color | null) => {
-        setGameState((prev: GameState | null) => {
+    const executeMove = useCallback((playerIndex: number, cards: Card[], nextColor: Color | null) => {
+        setGameState(prev => {
             if (!prev) return prev;
-
             const newPlayers = [...prev.players];
-            const currentHand = newPlayers[playerIdx];
+            const currentHand = newPlayers[playerIndex];
             if (!currentHand) return prev;
+            
+            const cardIds = cards.map(c => c.id);
+            newPlayers[playerIndex] = currentHand.filter(c => !cardIds.includes(c.id));
 
-            const cardIds = cards.map((c: Card) => c.id);
-            newPlayers[playerIdx] = currentHand.filter((c: Card) => !cardIds.includes(c.id));
-
-            const lastCard = cards[cards.length - 1];
-            if (!lastCard) return prev;
-
-            let nextTurn = (prev.turn + prev.direction + 2) % 2;
-            let nextDirection = prev.direction;
-
-            if (lastCard.value === 'skip') {
-                nextTurn = (nextTurn + prev.direction + 2) % 2;
-            } else if (lastCard.value === 'reverse') {
-                nextDirection = (prev.direction * -1) as (1 | -1);
-                nextTurn = (prev.turn + nextDirection + 2) % 2;
-            }
+            const isWin = newPlayers[playerIndex].length === 0;
+            // 次のターン計算
+            let nextTurn = (prev.turn + prev.direction + prev.playerCount) % prev.playerCount;
 
             return {
                 ...prev,
                 players: newPlayers,
                 discardPile: [...prev.discardPile, ...cards],
-                turn: nextTurn,
-                direction: nextDirection,
-                activeColor: selectedColor,
-                gameEnd: newPlayers[playerIdx]?.length === 0,
-                winner: newPlayers[playerIdx]?.length === 0 ? playerIdx : null,
+                activeColor: nextColor,
+                turn: isWin ? prev.turn : nextTurn,
+                gameEnd: isWin,
+                winner: isWin ? playerIndex : null
             };
         });
-        setIsSelectingColor(false);
         setPendingCards([]);
-    };
+        setIsSelectingColor(false);
+    }, []);
 
-    const drawCard = (playerIdx: number) => {
-        setGameState((prev: GameState | null) => {
-            if (!prev || prev.turn !== playerIdx) return prev;
+    const playCards = useCallback((playerIndex: number, cards: Card[]) => {
+        if (!cards || cards.length === 0) return;
+        const lastCard = cards[cards.length - 1];
+        if (!lastCard) return;
+
+        if (lastCard.color === 'wild' || lastCard.value === 'wild' || lastCard.value === 'wild4') {
+            if (playerIndex === 0) {
+                setPendingCards(cards);
+                setIsSelectingColor(true);
+            } else {
+                const colors: Color[] = ['red', 'blue', 'green', 'yellow'];
+                const aiColor = colors[Math.floor(Math.random() * colors.length)]!;
+                executeMove(playerIndex, cards, aiColor);
+            }
+        } else {
+            executeMove(playerIndex, cards, null);
+        }
+    }, [executeMove]);
+
+    const drawCard = useCallback((playerIndex: number) => {
+        setGameState(prev => {
+            if (!prev || prev.turn !== playerIndex) return prev;
             const newDeck = [...prev.deck];
-            const drawn = newDeck.pop();
-            if (!drawn) return prev;
-
+            const card = newDeck.pop();
+            if (!card) return prev;
             const newPlayers = [...prev.players];
-            const currentHand = newPlayers[playerIdx];
+            const currentHand = newPlayers[playerIndex];
             if (!currentHand) return prev;
-            newPlayers[playerIdx] = [...currentHand, drawn];
-
-            return {
-                ...prev,
-                deck: newDeck,
-                players: newPlayers,
-                turn: (prev.turn + prev.direction + 2) % 2,
-            };
+            newPlayers[playerIndex] = [...currentHand, card];
+            return { ...prev, deck: newDeck, players: newPlayers, turn: (prev.turn + prev.direction + prev.playerCount) % prev.playerCount };
         });
-    };
+    }, []);
 
-    return {
-        gameState,
-        initGame,
-        playCards,
-        drawCard,
-        isSelectingColor,
-        pendingCards,
-        executeMove,
-    };
+    // CPU自動実行ロジック（修正版）
+    useEffect(() => {
+        if (!gameState || gameState.gameEnd || gameState.turn === 0) return;
+
+        const cpuMove = () => {
+            const currentHand = gameState.players[gameState.turn];
+            const topCard = gameState.discardPile[gameState.discardPile.length - 1];
+            if (!currentHand || !topCard) return;
+            const cards = selectAiCards(currentHand, topCard, gameState.activeColor);
+
+            if (cards.length > 0) {
+                playCards(gameState.turn, cards);
+            } else {
+                drawCard(gameState.turn);
+            }
+        };
+
+        const timer = setTimeout(cpuMove, 1200); // CPUの思考時間
+        return () => clearTimeout(timer);
+    }, [gameState?.turn, gameState?.activeColor, playCards, drawCard]);
+
+    return { gameState, initGame, playCards, drawCard, isSelectingColor, pendingCards, executeMove, setGameState };
 };

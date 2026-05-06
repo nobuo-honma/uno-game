@@ -10,10 +10,11 @@ export interface Card {
 export interface GameState {
     deck: Card[];
     discardPile: Card[];
-    players: Card[][]; // 0: Player, 1: AI
+    players: Card[][]; // インデックス0が自分、1-3がCPU
     turn: number;
     direction: 1 | -1;
     gameEnd: boolean;
     winner: number | null;
-    activeColor: Color | null; // ワイルドカード使用時にここに指定色が入る
+    activeColor: Color | null;
+    playerCount: number; // 2〜4人で可変
 }
